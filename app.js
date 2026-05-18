@@ -2,6 +2,34 @@ const tg = window.Telegram?.WebApp;
 tg?.ready();
 tg?.expand();
 
+function clone(value) {
+  return JSON.parse(JSON.stringify(value));
+}
+
+const resourceIcons = {
+  wood: "🌲",
+  ore: "⛏️",
+  grain: "🌾",
+  herbs: "🌿",
+  wool: "🧶",
+  coal: "⬛",
+  salt: "🧂",
+  stone: "🪨",
+  planks: "🪵",
+  ingot: "🔩",
+  flour: "🥣",
+  cloth: "🧵",
+  extract: "🧪",
+  brick: "🧱",
+  tools: "🛠️",
+  bread: "🥖",
+  clothes: "👕",
+  medicine: "💊",
+  furniture: "🪑",
+  wagons: "🛞",
+  supplies: "📦"
+};
+
 const resources = {
   wood: { name: "Древесина", base: 5, tier: "Сырьё" },
   ore: { name: "Руда", base: 8, tier: "Сырьё" },
@@ -144,6 +172,7 @@ const initialState = {
 };
 
 let state = loadState();
+normalizeState();
 ensureContracts();
 
 function makeInitialCities() {
@@ -161,16 +190,31 @@ function makeInitialCities() {
 function loadState() {
   try {
     const saved = JSON.parse(localStorage.getItem("karavanika-state"));
-    if (!saved || saved.version !== 2) return structuredClone(initialState);
+    if (!saved || saved.version !== 2) return clone(initialState);
     return {
-      ...structuredClone(initialState),
+      ...clone(initialState),
       ...saved,
       inventory: { ...initialInventory, ...saved.inventory },
       cities: mergeCities(saved.cities)
     };
   } catch {
-    return structuredClone(initialState);
+    return clone(initialState);
   }
+}
+
+function normalizeState() {
+  state.inventory = { ...initialInventory, ...(state.inventory || {}) };
+  state.cities = mergeCities(state.cities);
+  state.contracts = Array.isArray(state.contracts) ? state.contracts : [];
+  state.activeCaravans = Array.isArray(state.activeCaravans) ? state.activeCaravans : [];
+  state.guildProgress = state.guildProgress && typeof state.guildProgress === "object" ? state.guildProgress : {};
+  state.marketCity = cityDefs[state.marketCity] ? state.marketCity : "capital";
+  state.eventIndex = events[state.eventIndex] ? state.eventIndex : 0;
+  state.nextEventIndex = events[state.nextEventIndex] ? state.nextEventIndex : 1;
+  state.energyLimit = Number.isFinite(state.energyLimit) ? state.energyLimit : initialState.energyLimit;
+  state.energy = Number.isFinite(state.energy) ? Math.min(state.energy, state.energyLimit) : state.energyLimit;
+  state.storageLimit = Number.isFinite(state.storageLimit) ? state.storageLimit : initialState.storageLimit;
+  state.log = Array.isArray(state.log) ? state.log : [...initialState.log];
 }
 
 function mergeCities(savedCities = {}) {
@@ -185,13 +229,13 @@ function saveState() {
   localStorage.setItem("karavanika-state", JSON.stringify(state));
 }
 
-function event() {
+function currentEvent() {
   return events[state.eventIndex];
 }
 
 function cityTax(cityId) {
   const city = cityDefs[cityId];
-  return city.tax * (event().tax?.[cityId] || 1);
+  return city.tax * (currentEvent().tax?.[cityId] || 1);
 }
 
 function stockNorm(itemId) {
@@ -209,7 +253,7 @@ function priceOf(cityId, itemId, mode = "sell") {
   const demand = city.demand[itemId] || 1;
   const wave = 0.94 + ((Math.sin((state.day * 1.9 + state.priceSeed + itemId.length + cityId.length) * 0.93) + 1) / 2) * 0.16;
   const taxed = mode === "buy" ? 1 + cityTax(cityId) + 0.08 : Math.max(0.55, 1 - cityTax(cityId));
-  return Math.max(1, Math.round(resources[itemId].base * demand * scarcity(cityId, itemId) * (event().mod[itemId] || 1) * wave * taxed));
+  return Math.max(1, Math.round(resources[itemId].base * demand * scarcity(cityId, itemId) * (currentEvent().mod[itemId] || 1) * wave * taxed));
 }
 
 function clamp(min, max, value) {
@@ -231,7 +275,11 @@ function bundleQty(bundle) {
 function formatBundle(bundle) {
   const entries = Object.entries(bundle || {});
   if (!entries.length) return "нет";
-  return entries.map(([id, qty]) => `${resources[id].name} ${qty}`).join(", ");
+  return entries.map(([id, qty]) => `${icon(id)} ${resources[id].name} ${qty}`).join(", ");
+}
+
+function icon(itemId) {
+  return resourceIcons[itemId] || "◇";
 }
 
 function hasItems(bundle) {
@@ -263,7 +311,7 @@ function produce(workshopId) {
   const workshop = workshops.find((item) => item.id === workshopId);
   if (!workshop) return;
   if (state.energy < workshop.shifts) return toast("Не хватает рабочих смен. Перейди к следующему дню.", "error");
-  const eventProduction = event().production || {};
+  const eventProduction = currentEvent().production || {};
   const result = Object.fromEntries(Object.entries(workshop.result).map(([id, qty]) => [id, Math.max(1, Math.round(qty * (eventProduction[id] || 1)))]));
   const output = bundleQty(result);
   if (!hasItems(workshop.cost)) return toast("Недостаточно ресурсов для цеха.", "error");
@@ -336,7 +384,7 @@ function travelDays(from, to, guard) {
 
 function caravanRisk(from, to, guard) {
   const base = 0.08 + Math.abs(cityDefs[from].distance - cityDefs[to].distance) * 0.04;
-  return clamp(0.03, 0.34, base * (event().risk || 1) * (guard ? 0.42 : 1));
+  return clamp(0.03, 0.34, base * (currentEvent().risk || 1) * (guard ? 0.42 : 1));
 }
 
 function caravanFee(from, to, qty, guard) {
@@ -415,7 +463,7 @@ function nextDay() {
   if (state.day % 4 === 0) {
     state.eventIndex = state.nextEventIndex;
     state.nextEventIndex = (state.nextEventIndex + 1) % events.length;
-    addLog(`Новое событие: ${event().name}.`);
+    addLog(`Новое событие: ${currentEvent().name}.`);
   }
   consumeCities();
   resolveCaravans();
@@ -432,7 +480,7 @@ function storageRent() {
 
 function consumeCities() {
   Object.entries(cityDefs).forEach(([cityId, city]) => {
-    const extra = event().consumption?.[cityId] || {};
+    const extra = currentEvent().consumption?.[cityId] || {};
     const items = new Set([...Object.keys(city.consumption), ...Object.keys(extra)]);
     items.forEach((itemId) => {
       const amount = (city.consumption[itemId] || 0) + (extra[itemId] || 0);
@@ -462,8 +510,8 @@ function render() {
   document.getElementById("energy").textContent = `${state.energy}/${state.energyLimit}`;
   document.getElementById("storage").textContent = `${inventoryTotal()}/${state.storageLimit}`;
   document.getElementById("reputation").textContent = state.reputation;
-  document.getElementById("eventName").textContent = event().name;
-  document.getElementById("eventEffect").textContent = `${event().effect}. Далее: ${events[state.nextEventIndex].name}`;
+  document.getElementById("eventName").textContent = currentEvent().name;
+  document.getElementById("eventEffect").textContent = `${currentEvent().effect}. Далее: ${events[state.nextEventIndex].name}`;
 
   renderMarketSelect();
   renderTicker();
@@ -497,7 +545,7 @@ function renderTicker() {
 
   document.getElementById("ticker").innerHTML = bestItems.map(({ itemId, cityId, price }) => `
     <button class="ticker-item" type="button" data-pick-city="${cityId}">
-      <strong>${resources[itemId].name}</strong>
+      <strong><span class="res-icon">${icon(itemId)}</span>${resources[itemId].name}</strong>
       <span>${price} в ${cityDefs[cityId].name}</span>
     </button>
   `).join("");
@@ -505,7 +553,7 @@ function renderTicker() {
 
 function renderProduction() {
   document.getElementById("productionGrid").innerHTML = workshops.map((workshop) => {
-    const result = Object.fromEntries(Object.entries(workshop.result).map(([id, qty]) => [id, Math.max(1, Math.round(qty * (event().production?.[id] || 1)))]));
+    const result = Object.fromEntries(Object.entries(workshop.result).map(([id, qty]) => [id, Math.max(1, Math.round(qty * (currentEvent().production?.[id] || 1)))]));
     const locked = state.energy < workshop.shifts || !hasItems(workshop.cost);
     return `
       <article class="card production-card">
@@ -528,6 +576,7 @@ function renderProduction() {
 function renderInventory() {
   document.getElementById("inventory").innerHTML = Object.entries(resources).map(([id, item]) => `
     <div class="item">
+      <div class="item-icon">${icon(id)}</div>
       <span>${item.name}</span>
       <small>${item.tier}</small>
       <strong>${state.inventory[id]}</strong>
@@ -546,7 +595,7 @@ function renderMarket() {
     return `
       <article class="card market-card">
         <div class="card-title">
-          <strong>${item.name}</strong>
+          <strong><span class="res-icon">${icon(itemId)}</span>${item.name}</strong>
           <span class="badge">${deficit}</span>
         </div>
         <dl class="price-grid">
@@ -578,7 +627,7 @@ function renderCities() {
         </div>
         <p class="recipe">Потребление: ${formatBundle(city.consumption)}</p>
         <div class="shortage-list">
-          ${shortages.map(({ itemId, price }) => `<button type="button" data-pick-city="${cityId}" class="shortage"><span>${resources[itemId].name}</span><strong>${price}</strong></button>`).join("")}
+          ${shortages.map(({ itemId, price }) => `<button type="button" data-pick-city="${cityId}" class="shortage"><span><span class="res-icon">${icon(itemId)}</span>${resources[itemId].name}</span><strong>${price}</strong></button>`).join("")}
         </div>
       </article>
     `;
@@ -587,7 +636,7 @@ function renderCities() {
 
 function renderCaravanBuilder() {
   const cityOptions = Object.entries(cityDefs).map(([id, city]) => `<option value="${id}">${city.name}</option>`).join("");
-  const itemOptions = Object.entries(resources).map(([id, item]) => `<option value="${id}">${item.name}</option>`).join("");
+  const itemOptions = Object.entries(resources).map(([id, item]) => `<option value="${id}">${icon(id)} ${item.name}</option>`).join("");
   document.getElementById("caravanBuilder").innerHTML = `
     <label>Откуда<select class="select" id="caravanFrom">${cityOptions}</select></label>
     <label>Куда<select class="select" id="caravanTo">${cityOptions}</select></label>
@@ -608,7 +657,7 @@ function renderActiveCaravans() {
   }
   el.innerHTML = state.activeCaravans.map((route) => `
     <article class="card compact">
-      <strong>${resources[route.itemId].name} ${route.qty}</strong>
+      <strong><span class="res-icon">${icon(route.itemId)}</span>${resources[route.itemId].name} ${route.qty}</strong>
       <p class="recipe">${cityDefs[route.from].name} -> ${cityDefs[route.to].name}</p>
       <p class="subtle">Осталось дней: ${route.daysLeft}. Риск: ${Math.round(caravanRisk(route.from, route.to, route.guard) * 100)}%</p>
     </article>
@@ -622,7 +671,7 @@ function renderContracts() {
         <strong>${cityDefs[contract.city].name}</strong>
         <span class="badge">до дня ${contract.due}</span>
       </div>
-      <p class="recipe">Поставка: ${resources[contract.item].name} ${contract.qty}. Премия: +${Math.round((contract.premium - 1) * 100)}%.</p>
+      <p class="recipe">Поставка: ${icon(contract.item)} ${resources[contract.item].name} ${contract.qty}. Премия: +${Math.round((contract.premium - 1) * 100)}%.</p>
       <dl class="price-grid">
         <div><dt>Выплата</dt><dd class="positive">${contractPayout(contract)}</dd></div>
         <div><dt>Репутация</dt><dd>${contract.rep}</dd></div>
