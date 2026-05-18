@@ -1,0 +1,132 @@
+<!doctype html>
+<html lang="ru">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#111827" />
+    <title>Караваника</title>
+    <link rel="stylesheet" href="./styles.css" />
+    <script src="https://telegram.org/js/telegram-web-app.js"></script>
+  </head>
+  <body>
+    <div class="app-shell">
+      <header class="topbar">
+        <div>
+          <p class="eyebrow">Telegram Mini App</p>
+          <h1>Караваника</h1>
+        </div>
+        <div class="wallet">
+          <span class="wallet-label">Казна</span>
+          <strong id="coins">0</strong>
+        </div>
+      </header>
+
+      <main>
+        <section class="status-grid" aria-label="Сводка">
+          <div class="status-card">
+            <span>День</span>
+            <strong id="day">1</strong>
+          </div>
+          <div class="status-card">
+            <span>Репутация</span>
+            <strong id="reputation">0</strong>
+          </div>
+          <div class="status-card">
+            <span>Склад</span>
+            <strong id="storage">0/120</strong>
+          </div>
+          <div class="status-card accent">
+            <span id="eventName">Событие</span>
+            <strong id="eventEffect">-</strong>
+          </div>
+        </section>
+
+        <section class="map-panel">
+          <div class="route-map" aria-label="Карта торговых земель">
+            <svg viewBox="0 0 900 260" role="img" aria-labelledby="mapTitle">
+              <title id="mapTitle">Торговый путь между регионами Караваники</title>
+              <path class="route-line" d="M92 164 C210 82, 310 210, 445 134 S680 50, 808 153" />
+              <g class="city city-a">
+                <circle cx="92" cy="164" r="22" />
+                <text x="92" y="211">Хребет</text>
+              </g>
+              <g class="city city-b">
+                <circle cx="280" cy="98" r="20" />
+                <text x="280" y="66">Леса</text>
+              </g>
+              <g class="city city-c">
+                <circle cx="455" cy="138" r="24" />
+                <text x="455" y="186">Столица</text>
+              </g>
+              <g class="city city-d">
+                <circle cx="636" cy="79" r="18" />
+                <text x="636" y="46">Порт</text>
+              </g>
+              <g class="city city-e">
+                <circle cx="808" cy="153" r="21" />
+                <text x="808" y="201">Оазис</text>
+              </g>
+            </svg>
+          </div>
+          <div class="market-ticker" id="ticker"></div>
+        </section>
+
+        <nav class="tabs" aria-label="Разделы игры">
+          <button class="tab is-active" data-tab="work" type="button">Производство</button>
+          <button class="tab" data-tab="market" type="button">Рынок</button>
+          <button class="tab" data-tab="caravan" type="button">Караваны</button>
+          <button class="tab" data-tab="guild" type="button">Гильдия</button>
+        </nav>
+
+        <section class="tab-page is-active" id="work">
+          <div class="section-head">
+            <h2>Мастерские</h2>
+            <button class="icon-button" id="nextDay" type="button" title="Следующий день">Вперёд</button>
+          </div>
+          <div class="work-grid" id="productionGrid"></div>
+          <h3>Склад</h3>
+          <div class="inventory" id="inventory"></div>
+        </section>
+
+        <section class="tab-page" id="market">
+          <div class="section-head">
+            <h2>Рынок игроков</h2>
+            <button class="icon-button" id="refreshMarket" type="button" title="Обновить рынок">Обновить</button>
+          </div>
+          <div class="market-grid" id="marketGrid"></div>
+        </section>
+
+        <section class="tab-page" id="caravan">
+          <div class="section-head">
+            <h2>Караваны</h2>
+            <span class="subtle">Доставляй товары в города с повышенным спросом</span>
+          </div>
+          <div class="caravan-grid" id="caravanGrid"></div>
+        </section>
+
+        <section class="tab-page" id="guild">
+          <div class="section-head">
+            <h2>Гильдейский заказ</h2>
+            <span class="subtle">Общий проект меняется после выполнения</span>
+          </div>
+          <div class="guild-board">
+            <div>
+              <p class="eyebrow" id="guildName">-</p>
+              <h3 id="guildGoal">-</h3>
+              <div class="progress">
+                <span id="guildProgress"></span>
+              </div>
+              <p id="guildReward" class="guild-reward"></p>
+            </div>
+            <button class="primary-button" id="contributeGuild" type="button">Внести товары</button>
+          </div>
+          <h3>Журнал сделок</h3>
+          <div class="log" id="log"></div>
+        </section>
+      </main>
+    </div>
+
+    <div class="toast" id="toast" role="status" aria-live="polite"></div>
+    <script src="./app.js"></script>
+  </body>
+</html>
